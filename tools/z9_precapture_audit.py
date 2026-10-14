@@ -25,6 +25,8 @@ import numpy as np
 SCHEMA = 'z9-precapture-audit-v2'
 MODEL = 'Nikon Z9'
 MAIN_SHA = '6380ded18395ce11cb327c766721274c85127d2cf1a1e887ee60e3d156810bdd'
+# Public C5.32 observation points from capture_sequence.py, not Z8 bindings.
+ROUTE_PCS = {'mcu_frame': 0x40d2939c, 'gpio': 0x40fd9518}
 MAX_SAMPLES = 64 * 1024 * 1024
 MAX_FILE_BYTES = 512 * 1024 * 1024
 MAX_EVENTS = 100000
@@ -236,7 +238,7 @@ def _full_input_bounds(manifest, report):
             raise AuditError('trigger_binding', 'Consumer does not bind its own route request')
         pc = _integer(_need(consumed, 'consumer_pc'), 'route consumer PC', 1)
         bound_pc = _integer(_need(bindings[route], 'consumer_pc'), 'bound FULL consumer PC', 1)
-        if pc % 4 or pc != bound_pc:
+        if pc % 4 or pc != bound_pc or bound_pc != ROUTE_PCS[route]:
             raise AuditError('trigger_binding', 'Original route consumer PC differs from its binding')
         if (_need(consumed, 'origin') != 'original_firmware' or _need(consumed, 'matched') is not True
                 or _integer(_need(request, 'full_state'), 'requested FULL state', 0, 1) != 1):

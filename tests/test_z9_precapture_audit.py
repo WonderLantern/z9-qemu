@@ -62,7 +62,7 @@ class PrecaptureTests(unittest.TestCase):
         event('evict', 29, 0, reason='capacity')
         event('dma_complete', 30, 2)
         event('enqueue', 31, 2)
-        event('full_press_consumed', 40, consumer_pc=0x40123450, origin='original_firmware')
+        event('full_press_consumed', 40, consumer_pc=0x40d2939c, origin='original_firmware')
         event('submit', 41, 1, role='history')
         event('submit', 42, 2, role='history')
         event('dma_complete', 50, 3)
@@ -85,13 +85,13 @@ class PrecaptureTests(unittest.TestCase):
         self.manifest = dict(schema=audit.SCHEMA, run=dict(
             run_id='synthetic-contract', model=audit.MODEL, firmware_sha256=audit.MAIN_SHA,
             clock_id='virtual-0', clock_kind='qemu_virtual_ns', stopped=True,
-            full_consumer_pc=0x40123450,
+            full_consumer_pc=0x40d2939c,
             error=None, evidence_kind='synthetic'), queue=dict(capacity=2), frames=frames,
             events=events, storage=dict(kind='guest_nvme_export', card_path='card.raw',
                                        sector_size=512, catalog_complete=True, nef_files=files))
         self.manifest['run'].update(input_routes=['mcu_frame', 'gpio'], full_action_id='full-1',
-            full_route_bindings={'mcu_frame': {'consumer_pc': 0x40123450},
-                                 'gpio': {'consumer_pc': 0x40fd9350, 'full_channel_id': 60}})
+            full_route_bindings={'mcu_frame': {'consumer_pc': 0x40d2939c},
+                                 'gpio': {'consumer_pc': 0x40fd9518, 'full_channel_id': 60}})
         keys = struct.pack('<11I', 1 << 30, *([0] * 10)).hex()
         self.manifest['full_input_evidence'] = [
             dict(route_id='mcu_frame', action_id='full-1',
@@ -99,14 +99,14 @@ class PrecaptureTests(unittest.TestCase):
                               kind='input_queued', full_state=1, expected_keys_hex=keys),
                  consumer=dict(event_id='e7', clock_id='virtual-0', t_ns=40,
                                kind='key_consumer', origin='original_firmware', request_event_id='mcu-request',
-                               consumer_pc=0x40123450, matched=True, full_key_state=True,
+                               consumer_pc=0x40d2939c, matched=True, full_key_state=True,
                                expected_hex=keys, keys_hex=keys)),
             dict(route_id='gpio', action_id='full-1',
                  request=dict(event_id='gpio-request', clock_id='virtual-0', t_ns=35,
                               kind='gpio_input_set', full_state=1, levels=3),
                  consumer=dict(event_id='gpio-consumer', clock_id='virtual-0', t_ns=38,
                                kind='gpio_input_callback', origin='original_firmware',
-                               request_event_id='gpio-request', consumer_pc=0x40fd9350,
+                               request_event_id='gpio-request', consumer_pc=0x40fd9518,
                                matched=True, channel_id=60, state=1))]
         self.manifest['events'][7]['route_id'] = 'mcu_frame'
 
@@ -144,6 +144,16 @@ class PrecaptureTests(unittest.TestCase):
             m = copy.deepcopy(self.manifest)
             m['run'][key] = value
             self.assert_rejected(m, 'firmware_identity')
+
+    def test_self_consistent_foreign_consumer_bindings_are_rejected(self):
+        for route in ('mcu_frame', 'gpio'):
+            m = copy.deepcopy(self.manifest)
+            foreign = audit.ROUTE_PCS[route] + 4
+            m['run']['full_route_bindings'][route]['consumer_pc'] = foreign
+            for observation in m['full_input_evidence']:
+                if observation['route_id'] == route:
+                    observation['consumer']['consumer_pc'] = foreign
+            self.assert_rejected(m, 'trigger_binding')
 
     def pack_producers(self):
         for frame in self.manifest['frames']:
@@ -310,9 +320,9 @@ class PrecaptureTests(unittest.TestCase):
         for latest in (40, 41):
             m = copy.deepcopy(self.manifest)
             m['full_input_evidence'][1]['consumer']['t_ns'] = latest
-            m['run']['full_consumer_pc'] = 0x40fd9350
+            m['run']['full_consumer_pc'] = 0x40fd9518
             m['events'][7].update(route_id='gpio', event_id='gpio-consumer',
-                                  consumer_pc=0x40fd9350, t_ns=latest)
+                                  consumer_pc=0x40fd9518, t_ns=latest)
             m['events'][8]['t_ns'] = 42; m['events'][9]['t_ns'] = 43
             result = self.check(m)
             self.assertEqual(result['status'], 'synthetic_checks_passed', result)

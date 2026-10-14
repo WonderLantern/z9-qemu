@@ -272,6 +272,10 @@ it confirmed the decoding/comparison path only, not Z9 or pre-capture acceptance
 
 The model must be `Nikon Z9`, with C5.32 MAIN SHA256
 `6380ded18395ce11cb327c766721274c85127d2cf1a1e887ee60e3d156810bdd`.
+The MCU key consumer is pinned to `0x40d2939c` and the GPIO callback to
+`0x40fd9518`, matching this package's `tools/capture_sequence.py` observation
+points. Self-consistent bindings to another PC are rejected. The FULL GPIO
+channel ID must still come from the observed current native descriptors.
 The CLI additionally requires full 8280x5520 14-bit producer geometry. Small
 authored fixtures are available only through the injected test decoder, which
 always leaves `accepted` and `native_accepted` false. The implementation is
