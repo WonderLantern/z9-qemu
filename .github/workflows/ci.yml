@@ -24,6 +24,8 @@ jobs:
         run: python tools/audit_publication.py
       - name: Synthetic contracts
         run: sh tests/run.sh
+      - name: Optimized multi-frame audit counterexamples
+        run: python -O -B -m unittest discover -s tests -p test_z9_precapture_audit.py -v
       - name: Build pinned QEMU overlay
         run: python tools/build.py --jobs 2
       - name: Firmware-free realization
