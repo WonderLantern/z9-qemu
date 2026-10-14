@@ -32,3 +32,7 @@ jobs:
         run: python tools/check_video_options.py --qemu .build/build/qemu-system-aarch64 --output .local/video-options-ci.json
       - name: Authored service-core event program
         run: python tools/check_service_events.py --qemu .build/build/qemu-system-aarch64 --output .local/service-events-ci
+      - name: Bounded producer journal actual RAM transactions
+        run: |
+          python -B tests/test_z9_producer_journal.py --qemu .build/build/qemu-system-aarch64 --output .local/journal-ci
+          python -O -B tests/test_z9_producer_journal.py --qemu .build/build/qemu-system-aarch64 --output .local/journal-ci-optimized

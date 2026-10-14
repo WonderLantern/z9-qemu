@@ -33,6 +33,7 @@
 #include "target/arm/cpu.h"
 #include "target/arm/arm-powerctl.h"
 #include "nikon-raw-pixels.h"
+#include "nikon-producer-journal.h"
 
 #define TYPE_NIKON_Z9_LAB MACHINE_TYPE_NAME("nikon-z9-lab")
 #define Z9_NAND_MAIN 2048u
@@ -197,6 +198,11 @@ typedef struct Ex7JPEGPort {
 
 struct NikonZ9State {
     MachineState parent;
+    NJournal producer_journal;
+    NJReadFailure producer_journal_read_failure;
+    bool producer_journal_initialized;
+    GChecksum *producer_journal_checksum;
+    uint8_t *producer_journal_scratch;
     MemoryRegion image_ram;
     MemoryRegion image_bank_ram[ARRAY_SIZE(image_bank_ranges)];
     bool image_bank_model;
@@ -1756,6 +1762,7 @@ static bool graphics_table_range(uint32_t address, unsigned count,
 }
 
 static bool dma_ram_range(NikonZ9State *s, uint64_t addr, uint64_t bytes);
+#include "nikon-producer-journal-qemu.h"
 static bool graphics_dma_address(NikonZ9State *s, uint32_t local,
                                  uint64_t bytes, uint64_t *physical);
 
@@ -10702,6 +10709,7 @@ static bool primary_bounded_reset_write(NikonZ9State *s, hwaddr addr,
          * validity: native495 reuses6 after reset without new parameter writes.
          * No other unit becomes configured, no start/ready/IRQ is implied;
          * physical register/reset semantics remain a functional hypothesis. */
+        nj_reset(&s->producer_journal, NJ_D980, qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL));
         if (s->primary_reset_idle_stop_model) {
             s->primary_reset_previous_units = s->engine150c_active | s->engine150c_latched;
         }
@@ -12895,20 +12903,42 @@ static bool engine151_capture_pixels(NikonZ9State *s, unsigned i)
             }
         }
     }
+    NJOutput journal_source = producer_journal_output(NJ_D980,
+        bits == 14 ? NJ_PACKED14 : NJ_PACKED12, source, inbytes,
+        iw, ih, pitch, s->primary_d980_frames, s->primary_d980_frames, false);
+    NJParent journal_parent = producer_journal_parent(s, &journal_source, input, inbytes);
+    NJOutput journal_outputs[2] = {
+        producer_journal_output(NJ_NV16, NJ_NV16_PLANES, yaddr, plane,
+            ow, oh, stride, s->primary_d980_frames, s->engine151_capture_jobs + 1, false),
+        producer_journal_output(NJ_RAW151, NJ_PACKED14, raw_out, inbytes,
+            iw, ih, pitch, s->primary_d980_frames, s->engine151_raw_output_jobs + 1, false)
+    };
+    journal_outputs[0].nspans = 2;
+    journal_outputs[0].spans[1] = (NJSpan){uvaddr, plane};
+    NJToken journal_token;
+    nj_begin(&s->producer_journal, &journal_token, journal_outputs, raw_side ? 2 : 1,
+             journal_parent, qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL));
     if (address_space_write(&address_space_memory, yaddr, MEMTXATTRS_UNSPECIFIED,
             pixels, plane) != MEMTX_OK ||
         address_space_write(&address_space_memory, uvaddr, MEMTXATTRS_UNSPECIFIED,
-            pixels + plane, plane) != MEMTX_OK) { g_free(input); g_free(pixels); return false; }
+            pixels + plane, plane) != MEMTX_OK) {
+        producer_journal_finish(s, &journal_token, false);
+        g_free(input); g_free(pixels); return false;
+    }
     if (raw_side) {
         /* Candidate neutral RAW side output: same full geometry/pitch as
          * actual input. Independent tests verify complete RAM, including
          * low14 bits/padding. It is not an ISP/NR or physical layout claim. */
         if (address_space_write(&address_space_memory, raw_out, MEMTXATTRS_UNSPECIFIED,
-                input, inbytes) != MEMTX_OK) { g_free(input); g_free(pixels); return false; }
+                input, inbytes) != MEMTX_OK) {
+            producer_journal_finish(s, &journal_token, false);
+            g_free(input); g_free(pixels); return false;
+        }
         s->engine151_raw_output_jobs++; s->engine151_raw_output_bytes += inbytes;
         s->engine151_raw_output_target = raw_out; s->engine151_raw_output_source = source;
         s->engine151_raw_output_frame = s->primary_d980_frames;
     }
+    producer_journal_finish(s, &journal_token, true);
     g_free(input); g_free(pixels);
     s->engine151_green_samples = (uint64_t)(ow / 2) * (oh / 2);
     for (unsigned lane = 0; lane < 2; lane++) {
@@ -13310,6 +13340,9 @@ static bool engine151_write(NikonZ9State *s, hwaddr addr, uint64_t value,
     if (off == 0x14 && value == 0x3807f) {
         if (s->engine151_control_model && s->engine151_active[i]) {
             goto invalid; /* Active reset effects have not been modeled. */
+        }
+        if (i == 0) {
+            nj_reset(&s->producer_journal, NJ_RAW151, qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL));
         }
         if (i == 0 && s->engine151_capture_pixels_model) {
             if (s->engine151_capture_pending) { s->engine151_capture_cancels++; }
@@ -16863,6 +16896,10 @@ static bool engine1540_frame_write(NikonZ9State *s, hwaddr addr, uint64_t value,
     if (address_space_read(&address_space_memory, source, MEMTXATTRS_UNSPECIFIED, buffer, bytes) != MEMTX_OK) {
         g_free(buffer); unknown_access(s, addr, value, size, true); return true;
     }
+    NJOutput journal_source = producer_journal_output(NJ_RAW151, NJ_PACKED14,
+        source, bytes, w, h, pitch, s->engine151_raw_output_frame,
+        s->engine151_raw_output_jobs, false);
+    NJParent journal_parent = producer_journal_parent(s, &journal_source, buffer, bytes);
     uint64_t output_bytes=bytes;
     if (s->engine1540_lossless14_model) {
         /* Read-only Z9 C5.32/ZR C1.11 metadata inspection establishes F0
@@ -16880,14 +16917,26 @@ static bool engine1540_frame_write(NikonZ9State *s, hwaddr addr, uint64_t value,
     }
     uint64_t hash = UINT64_C(14695981039346656037);
     for (uint64_t i = 0; i < output_bytes; i++) { hash = (hash ^ buffer[i]) * UINT64_C(1099511628211); }
+    NJOutput journal_output = producer_journal_output(NJ_RAW1540,
+        s->engine1540_lossless14_model ? NJ_F0_LOSSLESS14 : NJ_PACKED14,
+        target, output_bytes, w, h, pitch, s->engine151_raw_output_frame,
+        s->raw_transport[0].frame_jobs + s->raw_transport[1].frame_jobs + 1, false);
+    NJToken journal_token;
+    nj_begin(&s->producer_journal, &journal_token, &journal_output, 1,
+             journal_parent, qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL));
     if (address_space_write(&address_space_memory, target, MEMTXATTRS_UNSPECIFIED, buffer, output_bytes) != MEMTX_OK ||
         address_space_read(&address_space_memory, target, MEMTXATTRS_UNSPECIFIED, buffer, output_bytes) != MEMTX_OK) {
+        producer_journal_finish(s, &journal_token, false);
         g_free(buffer); unknown_access(s, addr, value, size, true); return true;
     }
     uint64_t readback = UINT64_C(14695981039346656037);
     for (uint64_t i = 0; i < output_bytes; i++) { readback = (readback ^ buffer[i]) * UINT64_C(1099511628211); }
     g_free(buffer);
-    if (hash != readback) { unknown_access(s, addr, value, size, true); return true; }
+    if (hash != readback) {
+        producer_journal_finish(s, &journal_token, false);
+        unknown_access(s, addr, value, size, true); return true;
+    }
+    producer_journal_finish(s, &journal_token, true);
     s->raw_transport[bank].frame_jobs++; s->raw_transport[bank].frame_bytes += output_bytes;
     s->raw_transport[bank].frame_frame = s->engine151_raw_output_frame;
     s->raw_transport[bank].frame_source = source; s->raw_transport[bank].frame_target = target;
@@ -19090,6 +19139,16 @@ static const MemoryRegionOps dma_ops = {
 static void nikon_z9_init(MachineState *machine)
 {
     NikonZ9State *s = NIKON_Z9_LAB(machine);
+    s->producer_journal_initialized = true;
+    if (s->producer_journal.enabled) {
+        /* Preserve the existing GLib unrecoverable OOM semantics. */
+        s->producer_journal_checksum = g_checksum_new(G_CHECKSUM_SHA256);
+        s->producer_journal_scratch = g_try_malloc(NJ_SCRATCH_BYTES);
+        if (!s->producer_journal_checksum || !s->producer_journal_scratch) {
+            nj_fail(&s->producer_journal, NJ_FAIL_READBACK, 0, 0,
+                    (NJSpan){0}, qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL));
+        }
+    }
     MemoryRegion *mem = get_system_memory();
     unsigned cpus = machine->smp.cpus;
     const unsigned num_irq = 512; /* provisioned model capacity, not measured */
@@ -20636,6 +20695,10 @@ static void nikon_z9_class_init(ObjectClass *oc, const void *data)
     object_class_property_add_str(oc, "capture-thumbnail-nv16-state", get_capture_thumbnail_state, NULL);
     object_class_property_add_bool(oc, "capture-nv16-pipeline-model", get_capture_nv16_model, set_capture_nv16_model);
     object_class_property_add_str(oc, "capture-nv16-pipeline-state", get_capture_nv16_state, NULL);
+    object_class_property_add_bool(oc, "producer-generation-journal",
+        get_producer_generation_journal, set_producer_generation_journal);
+    object_class_property_add_str(oc, "producer-generation-journal-state",
+        get_producer_generation_journal_state, NULL);
     object_class_property_add_bool(oc, "raw-pipeline-model", get_raw_pipeline_model, set_raw_pipeline_model);
     object_class_property_add_str(oc, "raw-pipeline-state", get_raw_pipeline_state, NULL);
     object_class_property_add_bool(oc, "raw-pipeline-1514-completion-model",
@@ -20689,6 +20752,8 @@ static void nikon_z9_class_init(ObjectClass *oc, const void *data)
 static void nikon_z9_finalize(Object *obj)
 {
     NikonZ9State *s = NIKON_Z9_LAB(obj);
+    g_clear_pointer(&s->producer_journal_checksum, g_checksum_free);
+    g_free(s->producer_journal_scratch);
     g_clear_pointer(&s->nand_pages, g_hash_table_unref);
     g_clear_pointer(&s->serial_last_tx, g_free);
     if (s->serial_write_peer_timer) { timer_free(s->serial_write_peer_timer); }
