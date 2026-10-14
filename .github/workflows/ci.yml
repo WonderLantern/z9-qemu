@@ -11,7 +11,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 1
+      - name: Fetch complete ancestry of the reviewed revision
+        # Keep other independent fork branches outside this publication checkout.
+        # The auditor still checks every ref and every blob in this full history.
+        run: git fetch --no-tags --unshallow origin "$GITHUB_SHA"
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'

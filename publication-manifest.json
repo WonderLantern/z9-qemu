@@ -3,7 +3,7 @@
   "scope": "reviewed source-only publication inventory; no runtime artifacts",
   "files": {
     ".gitattributes": "7fb78f4eea20e9674afcc627db529ad744eeb3cc20805678bd4a3652f6bdeee4",
-    ".github/workflows/ci.yml": "34a214dcc5ef45fe154a8bf68f0bf62b2e3c299ea4bda58c78394b1653347c3a",
+    ".github/workflows/ci.yml": "1a7014a08c31c0c50f907b3687bb020cc8f93d09b4acb85d48eca6ce3234af89",
     ".gitignore": "e808a9aa19cd6270deee11411e66f78a36780ed13c464668bb2f5dcf3eb95138",
     "CONTRIBUTING.md": "9d01042c2da42cd2a7765f8c3097f670d445cc6ff8058b3c3e8b578ed3b25277",
     "COPYING": "dd3ce02338c3a48abb6ba59b48809f7108a8bd242cb0cc8be90daafa30707c28",
