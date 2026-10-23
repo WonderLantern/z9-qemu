@@ -97,3 +97,103 @@ static char *get_event_programmed_clock_state(Object *obj, Error **errp)
         "channel/group enable, independent pending/W1C; waveform phases unverified\"}");
     return g_string_free(out, false);
 }
+
+/* Extended independent counter outputs. The observed 00011000/00011002
+ * register classes on channels13/14 were retained but had no producer.
+ * These sources are independent of RAM DMA and of the primary source gate.
+ * The low H terminal and V terminal are treated inclusively at the explicit
+ * source oscillator, as in the existing source-counter contract. Unequal H
+ * fields and waveform phase/polarity remain physically unqualified; no
+ * calibrated line/sensor timing or original hardware specification is claimed.
+ */
+static uint64_t programmed_extended_period(NikonZ9State *s, unsigned ch)
+{
+    if (!s->event_extended_counters_model || !s->event_source_counter_hz ||
+        ch < 2 || ch >= 15) { return 0; }
+    const uint32_t *c = s->event_active_1508[ch];
+    unsigned h = c[0] & 0xffff;
+    if (!h || !c[1] || c[1] > UINT16_MAX || !c[5] ||
+        (c[2] && c[2] != UINT16_MAX) || c[6] ||
+        (c[7] & ~UINT32_C(0x22)) != 0x00011000 ||
+        c[4] > c[1] + 1 || c[5] > c[1] + 1) { return 0; }
+    uint64_t ticks = (uint64_t)(h + 1) * (c[1] + 1);
+    return (ticks * UINT64_C(1000000000) + s->event_source_counter_hz - 1) /
+           s->event_source_counter_hz;
+}
+
+static void programmed_extended_update(NikonZ9State *s)
+{
+    if (!s->event_extended_timer) { return; }
+    uint64_t now = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL), next = UINT64_MAX;
+    uint32_t armed = 0;
+    for (unsigned ch = 2; ch < 15; ch++) {
+        uint32_t bit = 1u << ch;
+        uint64_t period = programmed_extended_period(s, ch);
+        if (period && (s->event_control_1508[3] & bit) &&
+            (s->event_output_group_running & bit)) {
+            armed |= bit;
+            /* A repeated START or same-value commit is not a later deadline.
+             * Changed committed geometry takes effect at the next cycle.
+             * Actual STOP or enable clear cancels only the future clock. */
+            if (!s->event_extended_deadline[ch]) {
+                s->event_extended_deadline[ch] = now + period;
+            }
+            next = MIN(next, s->event_extended_deadline[ch]);
+        } else { s->event_extended_deadline[ch] = 0; }
+    }
+    s->event_extended_armed = armed;
+    if (next == UINT64_MAX) { timer_del(s->event_extended_timer); }
+    else { timer_mod(s->event_extended_timer, next); }
+}
+
+static void programmed_extended_expire(void *opaque)
+{
+    NikonZ9State *s = opaque;
+    uint64_t now = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
+    for (unsigned ch = 2; ch < 15; ch++) {
+        uint32_t bit = 1u << ch;
+        uint64_t deadline = s->event_extended_deadline[ch];
+        uint64_t period = programmed_extended_period(s, ch);
+        if (!period || !deadline || deadline > now ||
+            !(s->event_control_1508[3] & bit) ||
+            !(s->event_output_group_running & bit)) { continue; }
+        s->event_extended_ticks[ch]++;
+        s->event_extended_coalesced[ch] += !!(s->event_pending_1508 & bit);
+        s->event_pending_1508 |= bit;
+        s->event_extended_deadline[ch] = deadline + period;
+    }
+    programmed_extended_update(s);
+    event_channel_update_irq(s);
+}
+
+static bool get_event_extended_counters(Object *obj, Error **errp)
+{ return NIKON_Z9_LAB(obj)->event_extended_counters_model; }
+
+static void set_event_extended_counters(Object *obj, bool value, Error **errp)
+{
+    NikonZ9State *s = NIKON_Z9_LAB(obj);
+    if (s->event_extended_timer) {
+        error_setg(errp, "extended source counters are immutable after realization");return;
+    }
+    s->event_extended_counters_model = value;
+}
+
+static char *get_event_extended_counter_state(Object *obj, Error **errp)
+{
+    NikonZ9State *s = NIKON_Z9_LAB(obj);
+    GString *out = g_string_new(NULL);
+    g_string_append_printf(out, "{\"enabled\":%s,\"armed_mask\":%u,\"pending\":%u,"
+        "\"mask\":%u,\"oscillator_hz\":%"PRIu64",\"lanes\":[",
+        s->event_extended_counters_model ? "true" : "false",s->event_extended_armed,
+        s->event_pending_1508,s->event_mask_1508,s->event_source_counter_hz);
+    for (unsigned ch = 2; ch < 15; ch++) {
+        g_string_append_printf(out,"%s{\"channel\":%u,\"period_ns\":%"PRIu64
+            ",\"deadline_ns\":%"PRIu64",\"ticks\":%"PRIu64",\"coalesced\":%"PRIu64"}",
+            ch == 2 ? "" : ",",ch,programmed_extended_period(s,ch),
+            s->event_extended_deadline[ch],s->event_extended_ticks[ch],s->event_extended_coalesced[ch]);
+    }
+    g_string_append(out,"] ,\"pixel_bytes\":0,\"physical_timing_verified\":false,"
+        "\"scope\":\"explicit counter input class; independent clocks and own mask/W1C; "
+        "waveform phases and unequal-H interpretation unqualified\"}");
+    return g_string_free(out,false);
+}

@@ -3,7 +3,7 @@
  * Native configuration relates logical C0 aliases to real backing RAM.
  * This optional model stores uncompressed NV12 byte8 or packed10 big-word data;
  * it does not implement Nikon YUVCMP, ISP arithmetic or physical bus timing.
- * The existing Bayer tone path has eight effective component bits. No
+ * Packed10 preserves ten component bits through tone mapping and YUV. No
  * firmware PC, task flag, version or display address selects this behavior.
  */
 #include <zlib.h>
@@ -34,6 +34,7 @@ typedef struct WlMainOutputState {
     uint32_t cache_crc;
     unsigned cache_w, cache_h, cache_storage_h, cache_stride, cache_format;
     unsigned source_w, source_h, source_white;
+    uint64_t cache_input_frame;
     uint64_t frames, bytes, rejects, blocked, cache_builds, acquisitions, releases;
     uint64_t transport_frames, packet_builds;
     const char *rejection;
@@ -232,17 +233,22 @@ static int video_main_prepare(NikonZ9State *s,const NikonRawPixels *pixels,uint6
         m->blocked++;m->rejection="all physical main slots remain named or borrowed";return -1;
     }
     unsigned white=pixels->white;
-    if (!m->cache || m->cache_source!=pixels || m->cache_crc!=s->video_raw_pixels_crc ||
+    uint64_t input_frame = !s->raw_temporal_input_model ? 0 :
+        pixels==s->raw_pixels ? s->raw_temporal_input_frames :
+        pixels==s->video_secondary_sensor_pixels ? s->video_secondary_sensor_input_frame : 0;
+    if (!m->cache || m->cache_input_frame!=input_frame || m->cache_source!=pixels || m->cache_crc!=s->video_raw_pixels_crc ||
         m->cache_w!=width || m->cache_h!=height || m->cache_storage_h!=f.storage_height ||
         m->cache_stride!=stride || m->cache_format!=format ||
         m->source_w!=pixels->width || m->source_h!=pixels->height ||
         m->source_white!=white) {
-        g_autofree uint8_t *nv12=nikon_raw_pixels_yuv(pixels,width,height,width,true);
-        if (!nv12) { return main_reject(m,"main Bayer conversion failed"); }
+        g_autofree uint8_t *nv12=packed10?NULL:nikon_raw_pixels_yuv(pixels,width,height,width,true);
+        g_autofree uint16_t *nv12_10=packed10?nikon_raw_pixels_yuv10(pixels,width,height):NULL;
+        if (packed10?!nv12_10:!nv12) { return main_reject(m,"main Bayer conversion failed"); }
         uint8_t *packed=g_malloc0(f.bytes[0]+f.bytes[1]);
         for (unsigned p=0;p<2;p++) {
             unsigned rows=height/(p?2:1);
-            const uint8_t *input=nv12+(p?(uint64_t)width*height:0);
+            const uint8_t *input=nv12?nv12+(p?(uint64_t)width*height:0):NULL;
+            const uint16_t *input10=nv12_10?nv12_10+(p?(uint64_t)width*height:0):NULL;
             uint8_t *output=packed+(p?f.bytes[0]:0);
             for (unsigned y=0;y<rows;y++) {
                 if (format==0x302) {
@@ -254,7 +260,7 @@ static int video_main_prepare(NikonZ9State *s,const NikonRawPixels *pixels,uint6
                 for (unsigned x=0;x<width;x+=3) {
                     uint32_t word=0;
                     for (unsigned n=0;n<3 && x+n<width;n++) {
-                        unsigned v=((unsigned)input[(size_t)y*width+x+n]*1023+127)/255;
+                        unsigned v=input10[(size_t)y*width+x+n];
                         word|=v<<(22-n*10);
                     }
                     stl_be_p(output+(size_t)y*stride+(x/3)*4,word);
@@ -265,7 +271,7 @@ static int video_main_prepare(NikonZ9State *s,const NikonRawPixels *pixels,uint6
             g_clear_pointer(&m->packed_packet[p],g_free);m->packet_bytes[p]=0;
         }
         g_free(m->cache);m->cache=packed;m->cache_crc=s->video_raw_pixels_crc;
-        m->cache_source=pixels;
+        m->cache_source=pixels;m->cache_input_frame=input_frame;
         m->cache_w=width;m->cache_h=height;m->cache_storage_h=f.storage_height;
         m->cache_stride=stride;m->cache_format=format;
         m->source_w=pixels->width;m->source_h=pixels->height;
@@ -573,10 +579,10 @@ static char *get_video_main_state(Object *obj,Error **errp)
             j?",":"",first+j+1,r->time_ns,r->epoch,r->physical[0],r->physical[1],
             r->alias[0],r->alias[1],r->bank,r->row,r->selected,r->table,r->table_row);
     }
-    g_string_append_printf(out,"],\"storage_bits\":%u,\"component_precision_bits\":8,"
+    g_string_append_printf(out,"],\"storage_bits\":%u,\"component_precision_bits\":%u,"
         "\"source_format\":%u,\"original_algorithm\":false,\"compression_verified\":false,"
         "\"transport\":\"optional WLUV/zlib compact RAM; not Nikon YUVCMP\","
         "\"scope\":\"functional configured main NV12 byte8/packed10 RAM view; complete result query owns reuse\"}",
-        m->cache_format==0x302?8:10,m->cache_format);
+        m->cache_format==0x302?8:10,m->cache_format==0x332?10:8,m->cache_format);
     return g_string_free(out,false);
 }

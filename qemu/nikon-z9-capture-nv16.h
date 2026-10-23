@@ -104,7 +104,10 @@ static void capture_nv16_try(NikonZ9State *s)
     unsigned w = src[0x80 / 4] & 0x7fff, h = src[0x80 / 4] >> 16;
     unsigned stride = src[0x88 / 4];
     uint64_t y = capture_nv16_address(src, 0x100), uv = capture_nv16_address(src, 0x108);
-    if (!s->engine151_capture_jobs || s->capture_nv16_consumed151 == s->engine151_capture_jobs ||
+    Ex7IspSurface *owner=sensor_isp_find(s,y,uv,w,h,stride);
+    if (s->sensor_pool_model) {
+        if (!owner) { return; }
+    } else if (!s->engine151_capture_jobs || s->capture_nv16_consumed151 == s->engine151_capture_jobs ||
         y != s->engine151_capture_y || uv != s->engine151_capture_uv ||
         w != s->engine151_capture_width || h != s->engine151_capture_height ||
         stride != s->engine151_capture_stride) { return; }
@@ -151,7 +154,11 @@ static void capture_nv16_try(NikonZ9State *s)
     for (unsigned j = 0; j < 3; j++) { g_free(outputs[j]); }
     if (!ok) { s->capture_nv16_failed = true; return; }
     s->capture_nv16_jobs++; s->capture_nv16_input_bytes += plane * 2;
-    s->capture_nv16_consumed151 = s->engine151_capture_jobs;
+    s->capture_nv16_consumed151 = owner ? owner->job : s->engine151_capture_jobs;
+    if (owner) {
+        owner->consumed=true;
+        timer_mod(s->sensor_isp_timer,qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL)+1);
+    }
     for (unsigned j = 0; j < 3; j++) {
         const uint32_t *b = s->capture_nv16_output[j], *f = s->capture_nv16_geometry[j];
         s->capture_nv16_y[j] = capture_nv16_address(b, 0x20);

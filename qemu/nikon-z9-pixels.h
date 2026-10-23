@@ -6,7 +6,7 @@
 static void raw_pipeline_irq_update(NikonZ9State *s)
 {
     uint32_t pending = 0;
-    if (!s->engine1542_irq || !(s->raw_pipeline_model || s->video_preview_model)) { return; }
+    if (!s->engine1542_irq || !(s->raw_pipeline_model || s->video_preview_model || s->engine1543_stop_ack_model)) { return; }
     for (unsigned i = 0; i < 15; i++) {
         unsigned off = i < 10 ? 0x18 : i < 13 ? 0x10 : i == 13 ? 0x14 : 0x50;
         pending |= s->engine1542_pending[i] & s->engine1542_config[i][off / 4];
@@ -40,6 +40,7 @@ static void raw_source_boundary_receive(NikonZ9State *s, bool single_input)
     uint32_t active = s->engine150c_active &
         ~(s->engine150c_stop_requested | s->engine150c_stop_done |
           s->engine_150c_init[0x18 / 4]);
+    active = raw_source_handshake_filter(s, active, single_input);
     uint32_t causes = ((active & 2) ? 0x20000000 : 0) |
                       ((active & 0x10000) ? 0x40000000 : 0);
     if (!causes) {
@@ -53,6 +54,10 @@ static void raw_source_boundary_receive(NikonZ9State *s, bool single_input)
 
 static void raw_source_boundary_tick(NikonZ9State *s)
 {
+    /* The selected full RAW FIFO owns this source boundary. An empty
+     * periodic placeholder cannot preempt every actual queued DMA. */
+    if (s->primary_d980_input_pair_model && (s->engine150c_active & 0x4000) &&
+        !video_raw_descriptor(s)) { return; }
     raw_source_boundary_receive(s, false);
 }
 
@@ -161,7 +166,7 @@ static void raw_admission_observe(NikonZ9State *s, bool primary, bool secondary,
     RAW_GATE(19,s->raw_pipeline_151c_completion_model && (s->engine1518[source].pending&0x08100000));
     RAW_GATE(20,s->video_source_end_model && source==0 && (s->engine1518[0].pending&0x20000000));
     RAW_GATE(21,sensor_secondary && s->video_secondary_source_end_model && (s->engine1518[2].pending&0x20000000));
-    RAW_GATE(22,s->event1508_global1_model && (s->event_global1_pending&0x10));
+    RAW_GATE(22,!event_global1_secondary_owns_start(s) && s->event1508_global1_model && (s->event_global1_pending&0x10));
     RAW_GATE(23,s->primary_stopped_source_reset_model && !s->event_timing_active);
     RAW_GATE(24,internal && (s->video_yuv_output_events_model || video_main_armed(s)) && s->raw_pipeline_wait_bank &&
         ((s->raw_pipeline_bank_written[selected]&UINT64_C(0xfff0fff0fff0fff0))!=UINT64_C(0xfff0fff0fff0fff0) ||
@@ -281,7 +286,7 @@ static void raw_pipeline_tick(void *opaque)
         (s->raw_pipeline_151c_completion_model && (s->engine1518[source].pending & 0x08100000)) ||
         (s->video_source_end_model && source==0 && (s->engine1518[0].pending&0x20000000)) ||
         (sensor_secondary && s->video_secondary_source_end_model && (s->engine1518[2].pending&0x20000000)) ||
-        (s->event1508_global1_model && (s->event_global1_pending & 0x10))) { return; }
+        (!event_global1_secondary_owns_start(s) && s->event1508_global1_model && (s->event_global1_pending & 0x10))) { return; }
     /* Request the following batch separately, before its final frame.
      * The original callback wakes the frame task before storing its refill
      * byte. Combining bits0/3 can race that task on another CPU. Giving the
@@ -389,12 +394,17 @@ static void raw_pipeline_tick(void *opaque)
         unsigned w = widths[ch], h = heights[ch], stride = strides[ch];
         bool half = halves[ch];
         size_t ybytes = (size_t)stride * h, uvbytes = ybytes / (half ? 2 : 1);
-        if (!s->raw_pipeline_cache[ch] || s->raw_pipeline_cache_internal[ch]!=internal || s->raw_pipeline_width[ch] != w ||
+        uint64_t input_frame = !s->raw_temporal_input_model ? 0 :
+            pixel_source==s->raw_pixels ? s->raw_temporal_input_frames :
+            pixel_source==s->video_secondary_sensor_pixels ? s->video_secondary_sensor_input_frame : 0;
+        if (!s->raw_pipeline_cache[ch] || s->raw_pipeline_cache_input_frame[ch]!=input_frame ||
+            s->raw_pipeline_cache_internal[ch]!=internal || s->raw_pipeline_width[ch] != w ||
             s->raw_pipeline_height[ch] != h || s->raw_pipeline_stride[ch] != stride ||
             s->raw_pipeline_uv_half[ch] != half) {
             g_free(s->raw_pipeline_cache[ch]);
             s->raw_pipeline_cache[ch] = nikon_raw_pixels_yuv(pixel_source, w, h, stride, half);
             s->raw_pipeline_cache_internal[ch]=internal;
+            s->raw_pipeline_cache_input_frame[ch]=input_frame;
             s->raw_pipeline_width[ch] = w; s->raw_pipeline_height[ch] = h;
             s->raw_pipeline_stride[ch] = stride; s->raw_pipeline_uv_half[ch] = half;
         }
@@ -529,11 +539,7 @@ static void raw_pipeline_tick(void *opaque)
     /* Native4115a914..a974 consumes global1 bit4, dispatches the firmware's
      * current sequence event and sets its stream boundary flag. The older
      * timing-only model supplied bit7 alone. Here bit4 follows real pixels. */
-    if (s->event1508_global1_model && (s->event_extended_1508[0x68 / 4] & 0x10)) {
-        s->event_global1_pending |= 0x10;
-        s->event_global1_inputs++;
-        event_global1_update_irq(s);
-    }
+    event_global1_pixel_boundary(s);
     if (s->raw_pipeline_frames <= 8) {
         fprintf(stderr, "Z9_RAW_PIPELINE frame=%" PRIu64 " row=%u bytes=%" PRIu64
             " Y=%" PRIx64 ":%" PRIx64 ":%" PRIx64 " bank=%u pending=%x; functional Bayer output\n",

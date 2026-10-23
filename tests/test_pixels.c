@@ -10,7 +10,35 @@ static uint16_t lduw_le_p(const void *p) {
     return b[0] | ((uint16_t)b[1] << 8);
 }
 #include "../qemu/nikon-raw-pixels.h"
+static void check_ten_bit(void) {
+    /* A complete grey ramp is independent of the Bayer interpolation: all
+     * four CFA sites have the same value. Check direct sRGB quantization,
+     * rather than comparing this implementation with its own tone table. */
+    unsigned non_eight_bit = 0;
+    for (unsigned value=0; value<=4095; value++) {
+        uint8_t raw[8];
+        for (unsigned i=0;i<4;i++) { raw[2*i]=value; raw[2*i+1]=value>>8; }
+        NikonRawPixels *p=nikon_raw_pixels_new(raw,2,2,0,4095);
+        uint16_t *out=nikon_raw_pixels_yuv10(p,8,6);
+        assert(out);
+        double linear=(double)value/4095;
+        double encoded=linear<=0.0031308?12.92*linear:
+            1.055*pow(linear,1.0/2.4)-0.055;
+        unsigned wanted=lrint(encoded*1023);
+        for (unsigned i=0;i<48;i++) { assert(out[i]==wanted); }
+        for (unsigned i=48;i<72;i++) { assert(out[i]==512); }
+        unsigned eight=lrint(encoded*255);
+        non_eight_bit += wanted != (eight*1023+127)/255;
+        assert(!nikon_raw_pixels_yuv10(p,7,6));
+        assert(!nikon_raw_pixels_yuv10(p,8,0));
+        assert(!nikon_raw_pixels_yuv10(p,4098,2));
+        g_free(out);nikon_raw_pixels_free(p);
+    }
+    assert(non_eight_bit>1000);
+    assert(!nikon_raw_pixels_yuv10(NULL,8,6));
+}
 int main(void) {
+    check_ten_bit();
     const uint8_t red[8] = {255,15,0,0,0,0,0,0};
     const uint8_t white[8] = {255,15,255,15,255,15,255,15};
     const uint8_t black[8] = {0};

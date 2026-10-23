@@ -1,9 +1,13 @@
 # WonderLantern Z9 QEMU
 
-[Current Z9 two-photo full RAW qualification / 当前Z9完整双拍验收](docs/photo-qualification221.json)
+**2026-10-23: shared441 development source update.** See [current changes, whole-workflow evidence and limitations](docs/shared441.md) for 1/1000 bursts, ZR Main10/R3D, the receiver fix and the still-failing pre-release path. This portable rebuild does not inherit older camera qualifications. Bring your own firmware; original ISP/DSP/codec algorithms remain unimplemented.
+
+## Historical shared221 and earlier usage/qualification
+
+[Historical shared221 Z9 two-photo qualification / 旧版双拍验收](docs/photo-qualification221.json)
 
 
-[Portable ZR recording qualification / 公开包录制验收](docs/recording-qualification221.json)
+[Historical shared221 ZR recording qualification / 旧版录制验收](docs/recording-qualification221.json)
 
 **shared221 source update.** The shared devices and functional HE codec now
 have complete ZR C1.11 two30-second Main10/R3D recording evidence. This is not
@@ -29,7 +33,7 @@ Lantern port, or a complete EXPEED hardware specification. It has no USB
 camera access, updater or flashing tool. Z7 is a separate frozen project;
 Use the separately documented ZR companion for its own inputs and bindings. See [NOTICE.md](NOTICE.md).
 
-## Current scope
+## Historical shared221 scope
 
 The local research model runs the original English menu and shooting HUD.
 The firmware renders ISO/shutter, text/icon outlines and the red no-card mark.

@@ -1,3 +1,9 @@
+# Current shared441 scope
+
+See [shared441](shared441.md) and `source-snapshot.json` for the current development build. Camera qualifications below retain their original revision and executable hashes. They are not current-build regression results.
+
+## Historical records
+
 # Current: shared221
 
 See [current recording results and limits](shared221.md). The older sections below retain their original build scopes.

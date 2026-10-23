@@ -1,0 +1,128 @@
+{
+  "schema": 1,
+  "scope": "Historical local shared439 whole workflows; NOT portable shared441 qualification",
+  "binary_sha256": "2ef855d22c0c054a537656fd0abbd73a926bb0905e01401eb1bd54faf8905e85",
+  "burst_totals": {
+    "NEFs": 48,
+    "RAW_samples": 1515243520,
+    "JPEG_previews": 144,
+    "models": 2
+  },
+  "burst": {
+    "Z9": {
+      "run": "z9-qemu-930-current-whole-burst-root-focus",
+      "qualified": true,
+      "NEFs": 16,
+      "RAW_samples": 731289600,
+      "JPEG_previews": 48,
+      "exposure": "1/1000",
+      "menus": 4,
+      "terminal_sha256": "952014e3ebcda7fe2facf4acd897191df15feb72fffc6b92bdf449360e36f969",
+      "menu_recovery_scope": "Four original MENU-close followed by HALF-held/released fresh RAW/LCD gates; pure MENU-only return unqualified"
+    },
+    "ZR": {
+      "run": "zr-qemu-931-current-whole-burst",
+      "qualified": true,
+      "NEFs": 32,
+      "RAW_samples": 783953920,
+      "JPEG_previews": 96,
+      "exposure": "1/1000",
+      "menus": 4,
+      "terminal_sha256": "6cc8b82c67703016acf3dbebd6427ecff84f38455723dbf488edf5343e21e936",
+      "menu_recovery_scope": "Original MENU close plus HALF held/released; Fn3 appears in photo recovery recipe. Pure MENU-only return is unqualified.",
+      "original_parent_exit_status": 5,
+      "independent_file_storage_reconciliation_passed": true
+    }
+  },
+  "recording": {
+    "main10": {
+      "run": "zr-qemu-923-main10-ordered-notifications",
+      "result_sha256": "81cbea13f57cf731c7d4724cc9008c00fab2b408fbb92ab102263f45f875c1a1",
+      "original_parent_exit_status": 5,
+      "clips": [
+        {
+          "cycle": 1,
+          "file": "DCIM/100NIKON/DSC_0001.MOV",
+          "frames": 909,
+          "duration": "30.330300",
+          "source_acquisitions": 910,
+          "source_releases": 910,
+          "source_ownership": {
+            "valid": true,
+            "acquisitions": 910,
+            "releases": 910,
+            "transport_frames": 950,
+            "boundary": "first-gate-observation",
+            "pictures_before_first_START_observation": 0
+          },
+          "verified": true
+        },
+        {
+          "cycle": 2,
+          "file": "DCIM/100NIKON/DSC_0002.MOV",
+          "frames": 906,
+          "duration": "30.230200",
+          "source_acquisitions": 907,
+          "source_releases": 907,
+          "source_ownership": {
+            "valid": true,
+            "acquisitions": 907,
+            "releases": 907,
+            "transport_frames": 918,
+            "boundary": "first-gate-observation",
+            "pictures_before_first_START_observation": 0
+          },
+          "verified": true
+        }
+      ],
+      "reconciliation_scope": "Qualified functional files/ownership; original nonzero parent exit retained"
+    },
+    "r3d": {
+      "run": "zr-qemu-920-r3d-ordered-notifications",
+      "result_sha256": "23715be274ebeab59f3c2acf9c25132bb470309653f0bdfcaa270bacfe69975f",
+      "original_parent_exit_status": 4,
+      "clips": [
+        {
+          "cycle": 1,
+          "file": "DCIM/100NIKON/DSC_0001.R3D",
+          "frames": 1803,
+          "duration": "30.080050",
+          "source_acquisitions": 1828,
+          "source_releases": 1828,
+          "source_ownership": {
+            "valid": true,
+            "acquisitions": 1828,
+            "releases": 1828,
+            "transport_frames": 1832,
+            "boundary": "first-gate-observation",
+            "pictures_before_first_START_observation": 0
+          },
+          "verified": true
+        },
+        {
+          "cycle": 2,
+          "file": "DCIM/100NIKON/DSC_0002.R3D",
+          "frames": 1809,
+          "duration": "30.180150",
+          "source_acquisitions": 1836,
+          "source_releases": 1836,
+          "source_ownership": {
+            "valid": true,
+            "acquisitions": 1836,
+            "releases": 1836,
+            "transport_frames": 1847,
+            "boundary": "previous-matched-original-stop",
+            "pictures_before_first_START_observation": 28
+          },
+          "verified": true
+        }
+      ],
+      "reconciliation_scope": "Qualified functional files/ownership; original nonzero parent exit retained"
+    }
+  },
+  "native_RAW_prerelease_accepted": false,
+  "original_algorithms_accepted": false,
+  "NeuPro_documents_available": false,
+  "local_NN_reproduction": "inconclusive",
+  "private_payloads_included": false
+}

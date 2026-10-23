@@ -1,9 +1,13 @@
 # WonderLantern Z9 QEMU
 
-[Current Z9 two-photo full RAW qualification / 当前Z9完整双拍验收](docs/photo-qualification221.json)
+**2026-10-23：shared441 开发源码更新。** 新功能、双机1/1000连拍和ZR双格式录像的本地验证，以及尚未通过的预拍摄，统一见[最新状态与限制](docs/shared441.md)。当前公开重构建不自动继承旧整机验收；用户自行提供固件，原厂DSP/ISP/编码算法尚未实现。
+
+## 以下为 shared221 及更早版本的使用说明与历史验收
+
+[Historical shared221 Z9 two-photo qualification / 旧版双拍验收](docs/photo-qualification221.json)
 
 
-[Portable ZR recording qualification / 公开包录制验收](docs/recording-qualification221.json)
+[Historical shared221 ZR recording qualification / 旧版录制验收](docs/recording-qualification221.json)
 
 **shared221共享源码更新。** ZR C1.11的两段30秒H.265与R3D有完整原生及独立文件证据；不能据此宣称Z9录像通过。以下两次Z9照片数据保留shared146构建范围。详见[本轮实现、验证与限制](docs/shared221.md)。
 

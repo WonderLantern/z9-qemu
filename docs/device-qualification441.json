@@ -1,0 +1,406 @@
+{
+  "schema": 1,
+  "shared_revision": 441,
+  "binary_sha256": "d47c30344fe2ed28fdb7389d20a19d2ddcaf8eeaf83a12d1bd6f3a3ff95b4c7e",
+  "scope": "No proprietary firmware; no camera or physical timing qualification",
+  "frame_ownership": {
+    "passed": true,
+    "binary_sha256": "d47c30344fe2ed28fdb7389d20a19d2ddcaf8eeaf83a12d1bd6f3a3ff95b4c7e",
+    "cases": [
+      {
+        "model": "nikon-z9-lab",
+        "split": false,
+        "enabled": false,
+        "checks": [
+          "new model remains default-off",
+          "stopped cold receiver cannot own BEGIN",
+          "input0 remains independent",
+          "cold END follows selected legacy/owner behavior",
+          "paired source frame completes",
+          "W1C retires status",
+          "stopped END follows selected legacy/owner behavior",
+          "clock status never substitutes for pixels",
+          "repeated STOP grants no BEGIN",
+          "explicit END remains independent",
+          "resume cannot replay old phases",
+          "resume starts a fresh frame",
+          "no fake RAW DMA after resume",
+          "unknown access guard stays clear"
+        ],
+        "final": {
+          "enabled": false,
+          "receiver_enabled": true,
+          "inflight": false,
+          "begins": 0,
+          "ends": 0,
+          "unowned_ends_suppressed": 0,
+          "pending": 144,
+          "physical_protocol_verified": false,
+          "DMA_bytes": 0
+        },
+        "passed": true
+      },
+      {
+        "model": "nikon-z9-lab",
+        "split": false,
+        "enabled": true,
+        "checks": [
+          "new model remains default-off",
+          "stopped cold receiver cannot own BEGIN",
+          "input0 remains independent",
+          "cold END follows selected legacy/owner behavior",
+          "paired source frame completes",
+          "W1C retires status",
+          "stopped END follows selected legacy/owner behavior",
+          "one END per accepted BEGIN",
+          "unowned END is counted",
+          "clock status never substitutes for pixels",
+          "repeated STOP grants no BEGIN",
+          "explicit END remains independent",
+          "resume cannot replay old phases",
+          "resume starts a fresh frame",
+          "resumed frame retires exactly once",
+          "no fake RAW DMA after resume",
+          "unknown access guard stays clear"
+        ],
+        "final": {
+          "enabled": true,
+          "receiver_enabled": true,
+          "inflight": false,
+          "begins": 2,
+          "ends": 2,
+          "unowned_ends_suppressed": 4,
+          "pending": 144,
+          "physical_protocol_verified": false,
+          "DMA_bytes": 0
+        },
+        "passed": true
+      },
+      {
+        "model": "nikon-z9-lab",
+        "split": true,
+        "enabled": false,
+        "checks": [
+          "new model remains default-off",
+          "stopped cold receiver cannot own BEGIN",
+          "input0 remains independent",
+          "cold END follows selected legacy/owner behavior",
+          "enabled BEGIN arrives",
+          "mask cannot consume BEGIN",
+          "STOP keeps pending BEGIN",
+          "one started frame drains after STOP",
+          "W1C retires status",
+          "stopped END follows selected legacy/owner behavior",
+          "clock status never substitutes for pixels",
+          "repeated STOP grants no BEGIN",
+          "explicit END remains independent",
+          "resume cannot replay old phases",
+          "resume starts a fresh frame",
+          "no fake RAW DMA after resume",
+          "unknown access guard stays clear"
+        ],
+        "final": {
+          "enabled": false,
+          "receiver_enabled": true,
+          "inflight": false,
+          "begins": 0,
+          "ends": 0,
+          "unowned_ends_suppressed": 0,
+          "pending": 144,
+          "physical_protocol_verified": false,
+          "DMA_bytes": 0
+        },
+        "passed": true
+      },
+      {
+        "model": "nikon-z9-lab",
+        "split": true,
+        "enabled": true,
+        "checks": [
+          "new model remains default-off",
+          "stopped cold receiver cannot own BEGIN",
+          "input0 remains independent",
+          "cold END follows selected legacy/owner behavior",
+          "enabled BEGIN arrives",
+          "accepted BEGIN owns a frame",
+          "mask cannot consume BEGIN",
+          "STOP keeps pending BEGIN",
+          "one started frame drains after STOP",
+          "W1C retires status",
+          "stopped END follows selected legacy/owner behavior",
+          "one END per accepted BEGIN",
+          "unowned END is counted",
+          "clock status never substitutes for pixels",
+          "repeated STOP grants no BEGIN",
+          "explicit END remains independent",
+          "resume cannot replay old phases",
+          "resume starts a fresh frame",
+          "resumed frame retires exactly once",
+          "no fake RAW DMA after resume",
+          "unknown access guard stays clear"
+        ],
+        "final": {
+          "enabled": true,
+          "receiver_enabled": true,
+          "inflight": false,
+          "begins": 2,
+          "ends": 2,
+          "unowned_ends_suppressed": 4,
+          "pending": 144,
+          "physical_protocol_verified": false,
+          "DMA_bytes": 0
+        },
+        "passed": true
+      },
+      {
+        "model": "nikon-zr-lab",
+        "split": false,
+        "enabled": false,
+        "checks": [
+          "new model remains default-off",
+          "stopped cold receiver cannot own BEGIN",
+          "input0 remains independent",
+          "cold END follows selected legacy/owner behavior",
+          "paired source frame completes",
+          "W1C retires status",
+          "stopped END follows selected legacy/owner behavior",
+          "clock status never substitutes for pixels",
+          "repeated STOP grants no BEGIN",
+          "explicit END remains independent",
+          "resume cannot replay old phases",
+          "resume starts a fresh frame",
+          "no fake RAW DMA after resume",
+          "unknown access guard stays clear"
+        ],
+        "final": {
+          "enabled": false,
+          "receiver_enabled": true,
+          "inflight": false,
+          "begins": 0,
+          "ends": 0,
+          "unowned_ends_suppressed": 0,
+          "pending": 144,
+          "physical_protocol_verified": false,
+          "DMA_bytes": 0
+        },
+        "passed": true
+      },
+      {
+        "model": "nikon-zr-lab",
+        "split": false,
+        "enabled": true,
+        "checks": [
+          "new model remains default-off",
+          "stopped cold receiver cannot own BEGIN",
+          "input0 remains independent",
+          "cold END follows selected legacy/owner behavior",
+          "paired source frame completes",
+          "W1C retires status",
+          "stopped END follows selected legacy/owner behavior",
+          "one END per accepted BEGIN",
+          "unowned END is counted",
+          "clock status never substitutes for pixels",
+          "repeated STOP grants no BEGIN",
+          "explicit END remains independent",
+          "resume cannot replay old phases",
+          "resume starts a fresh frame",
+          "resumed frame retires exactly once",
+          "no fake RAW DMA after resume",
+          "unknown access guard stays clear"
+        ],
+        "final": {
+          "enabled": true,
+          "receiver_enabled": true,
+          "inflight": false,
+          "begins": 2,
+          "ends": 2,
+          "unowned_ends_suppressed": 4,
+          "pending": 144,
+          "physical_protocol_verified": false,
+          "DMA_bytes": 0
+        },
+        "passed": true
+      },
+      {
+        "model": "nikon-zr-lab",
+        "split": true,
+        "enabled": false,
+        "checks": [
+          "new model remains default-off",
+          "stopped cold receiver cannot own BEGIN",
+          "input0 remains independent",
+          "cold END follows selected legacy/owner behavior",
+          "enabled BEGIN arrives",
+          "mask cannot consume BEGIN",
+          "STOP keeps pending BEGIN",
+          "one started frame drains after STOP",
+          "W1C retires status",
+          "stopped END follows selected legacy/owner behavior",
+          "clock status never substitutes for pixels",
+          "repeated STOP grants no BEGIN",
+          "explicit END remains independent",
+          "resume cannot replay old phases",
+          "resume starts a fresh frame",
+          "no fake RAW DMA after resume",
+          "unknown access guard stays clear"
+        ],
+        "final": {
+          "enabled": false,
+          "receiver_enabled": true,
+          "inflight": false,
+          "begins": 0,
+          "ends": 0,
+          "unowned_ends_suppressed": 0,
+          "pending": 144,
+          "physical_protocol_verified": false,
+          "DMA_bytes": 0
+        },
+        "passed": true
+      },
+      {
+        "model": "nikon-zr-lab",
+        "split": true,
+        "enabled": true,
+        "checks": [
+          "new model remains default-off",
+          "stopped cold receiver cannot own BEGIN",
+          "input0 remains independent",
+          "cold END follows selected legacy/owner behavior",
+          "enabled BEGIN arrives",
+          "accepted BEGIN owns a frame",
+          "mask cannot consume BEGIN",
+          "STOP keeps pending BEGIN",
+          "one started frame drains after STOP",
+          "W1C retires status",
+          "stopped END follows selected legacy/owner behavior",
+          "one END per accepted BEGIN",
+          "unowned END is counted",
+          "clock status never substitutes for pixels",
+          "repeated STOP grants no BEGIN",
+          "explicit END remains independent",
+          "resume cannot replay old phases",
+          "resume starts a fresh frame",
+          "resumed frame retires exactly once",
+          "no fake RAW DMA after resume",
+          "unknown access guard stays clear"
+        ],
+        "final": {
+          "enabled": true,
+          "receiver_enabled": true,
+          "inflight": false,
+          "begins": 2,
+          "ends": 2,
+          "unowned_ends_suppressed": 4,
+          "pending": 144,
+          "physical_protocol_verified": false,
+          "DMA_bytes": 0
+        },
+        "passed": true
+      }
+    ],
+    "checks": 138,
+    "proprietary_firmware": false,
+    "native_camera_qualified": false,
+    "physical_protocol_verified": false
+  },
+  "video_options": {
+    "passed": true,
+    "binary_sha256": "d47c30344fe2ed28fdb7389d20a19d2ddcaf8eeaf83a12d1bd6f3a3ff95b4c7e",
+    "reports": [
+      {
+        "model": "nikon-z9-lab",
+        "enabled": false,
+        "options_checked": 9,
+        "owned_qemu_stopped": true,
+        "firmware_used": false,
+        "cpu_execution": false
+      },
+      {
+        "model": "nikon-z9-lab",
+        "enabled": true,
+        "options_checked": 9,
+        "owned_qemu_stopped": true,
+        "firmware_used": false,
+        "cpu_execution": false
+      },
+      {
+        "model": "nikon-zr-lab",
+        "enabled": false,
+        "options_checked": 9,
+        "owned_qemu_stopped": true,
+        "firmware_used": false,
+        "cpu_execution": false
+      },
+      {
+        "model": "nikon-zr-lab",
+        "enabled": true,
+        "options_checked": 9,
+        "owned_qemu_stopped": true,
+        "firmware_used": false,
+        "cpu_execution": false
+      }
+    ],
+    "checks": 108,
+    "native_movie_accepted": false
+  },
+  "service_events": {
+    "passed": true,
+    "checks": 13,
+    "classification": "authored_AArch64_execution_test",
+    "check_results": [
+      {
+        "name": "cold CPU starts with empty event state",
+        "passed": true
+      },
+      {
+        "name": "SEV before WFE is retained while receiver is running",
+        "passed": true
+      },
+      {
+        "name": "multiple pre-wait events coalesce into one consumption",
+        "passed": true
+      },
+      {
+        "name": "WFE without a new event remains halted",
+        "passed": true
+      },
+      {
+        "name": "SEV resumes a blocked WFE exactly once",
+        "passed": true
+      },
+      {
+        "name": "SEVL consumes the next WFE without blocking",
+        "passed": true
+      },
+      {
+        "name": "repeated wake 5",
+        "passed": true
+      },
+      {
+        "name": "repeated wake 6",
+        "passed": true
+      },
+      {
+        "name": "repeated wake 7",
+        "passed": true
+      },
+      {
+        "name": "ordinary IRQ wakes an already blocked WFE",
+        "passed": true
+      },
+      {
+        "name": "SEV does not wake WFI",
+        "passed": true
+      },
+      {
+        "name": "ordinary IRQ wakes WFI and later WFE can sleep",
+        "passed": true
+      },
+      {
+        "name": "no unknown MMIO in authored program",
+        "passed": true
+      }
+    ],
+    "proprietary_firmware": false
+  }
+}

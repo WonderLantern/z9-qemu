@@ -13,6 +13,7 @@ typedef struct NikonRawPixels {
     unsigned width, height, white;
     uint16_t *samples;
     uint8_t *tone;
+    uint16_t *tone10;
 } NikonRawPixels;
 
 static NikonRawPixels *nikon_raw_pixels_new(const uint8_t *samples,
@@ -27,10 +28,12 @@ static NikonRawPixels *nikon_raw_pixels_new(const uint8_t *samples,
     p->width = width; p->height = height; p->white = white;
     p->samples = g_new(uint16_t, (size_t)width * height);
     p->tone = g_malloc(65536);
+    p->tone10 = g_new(uint16_t, 65536);
     for (unsigned i = 0; i < 65536; i++) {
         double v = CLAMP(((double)i - black) / (white - black), 0, 1);
         v = v <= 0.0031308 ? 12.92 * v : 1.055 * pow(v, 1.0 / 2.4) - 0.055;
         p->tone[i] = CLAMP(lrint(v * 255), 0, 255);
+        p->tone10[i] = CLAMP(lrint(v * 1023), 0, 1023);
     }
     for (size_t i = 0; i < (size_t)width * height; i++) {
         p->samples[i] = lduw_le_p(samples + i * 2);
@@ -89,8 +92,49 @@ static uint8_t *nikon_raw_pixels_yuv(const NikonRawPixels *p, unsigned w,
     return data;
 }
 
+/* Full-range functional BT.601 NV12 samples in host uint16_t containers.
+ * Tone mapping and chroma reduction retain ten component bits throughout;
+ * this is authored functional processing, not the original Nikon ISP. */
+static uint16_t *nikon_raw_pixels_yuv10(const NikonRawPixels *p, unsigned w,
+                                       unsigned h)
+{
+    if (!p || !p->tone10 || !w || !h || ((w | h) & 1) ||
+        w > 4096 || h > 4096 || (uint64_t)w * h > 16 * MiB) {
+        return NULL;
+    }
+    size_t ycount = (size_t)w * h;
+    uint16_t *data = g_new0(uint16_t, ycount + ycount / 2);
+    uint16_t *uv = data + ycount;
+    for (unsigned y = 0; y < h; y += 2) {
+        for (unsigned x = 0; x < w; x += 2) {
+            unsigned sums[3] = {0};
+            for (unsigned dy = 0; dy < 2; dy++) {
+                for (unsigned dx = 0; dx < 2; dx++) {
+                    unsigned sx = (uint64_t)(x + dx) * (p->width / 2) / w * 2;
+                    unsigned sy = (uint64_t)(y + dy) * (p->height / 2) / h * 2;
+                    const uint16_t *q = p->samples + (size_t)sy * p->width + sx;
+                    unsigned rgb[3] = {p->tone10[q[0]],
+                        p->tone10[((unsigned)q[1] + q[p->width] + 1) / 2],
+                        p->tone10[q[p->width + 1]]};
+                    data[(size_t)(y + dy) * w + x + dx] =
+                        (77 * rgb[0] + 150 * rgb[1] + 29 * rgb[2] + 128) >> 8;
+                    for (unsigned c = 0; c < 3; c++) { sums[c] += rgb[c]; }
+                }
+            }
+            int red = (sums[0] + 2) / 4;
+            int green = (sums[1] + 2) / 4;
+            int blue = (sums[2] + 2) / 4;
+            uv[(size_t)(y / 2) * w + x] =
+                CLAMP(((-43 * red - 85 * green + 128 * blue + 128) >> 8) + 512, 0, 1023);
+            uv[(size_t)(y / 2) * w + x + 1] =
+                CLAMP(((128 * red - 107 * green - 21 * blue + 128) >> 8) + 512, 0, 1023);
+        }
+    }
+    return data;
+}
+
 static void nikon_raw_pixels_free(NikonRawPixels *p)
 {
     if (!p) { return; }
-    g_free(p->samples); g_free(p->tone); g_free(p);
+    g_free(p->samples); g_free(p->tone); g_free(p->tone10); g_free(p);
 }

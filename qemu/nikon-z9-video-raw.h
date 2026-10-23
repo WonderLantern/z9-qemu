@@ -28,12 +28,84 @@ static bool video_raw_record_posted(NikonZ9State *s,unsigned row)
 }
 
 
+/* Explicit external CFA modes, independent of the receiver ROI. Select the
+ * smallest covering declared frame (area, then width), never declaration order.
+ * Defaults preserve origin-zero admission. Geometry does not establish physical
+ * binning, optical margins, calibration or sensor mode identity. */
+static char *get_video_raw_source_frame(Object *obj, Error **errp)
+{
+    NikonZ9State *s=NIKON_Z9_LAB(obj);
+    GString *out=g_string_new(NULL);
+    if (!s->video_raw_input_frames) { g_string_append(out,"0x0"); }
+    for (unsigned i=0;i<s->video_raw_input_frames;i++) {
+        g_string_append_printf(out,"%s%ux%u",i?";":"",
+            s->video_raw_input_width[i],s->video_raw_input_height[i]);
+    }
+    return g_string_free(out,false);
+}
+static void set_video_raw_source_frame(Object *obj,const char *value,Error **errp)
+{
+    NikonZ9State *s=NIKON_Z9_LAB(obj);
+    unsigned widths[4]={0},heights[4]={0};char tail;
+    if (s->image_ram.ram || s->image_ram.rom_device) {
+        error_setg(errp,"RAW source frame immutable after realization");return;
+    }
+    if (!value || !*value) {
+        error_setg(errp,"bounded even RAW source WIDTHxHEIGHT modes required");return;
+    }
+    g_auto(GStrv) modes=g_strsplit(value,";",-1);
+    unsigned count=g_strv_length(modes);
+    if (!count || count>G_N_ELEMENTS(widths)) {
+        error_setg(errp,"one to four explicit RAW source modes required");return;
+    }
+    for (unsigned i=0;i<count;i++) {
+        unsigned w,h;
+        if (sscanf(modes[i],"%ux%u%c",&w,&h,&tail)!=2 || !w || !h ||
+            ((w|h)&1) || w>NIKON_RAW_MAX_DIMENSION || h>NIKON_RAW_MAX_DIMENSION ||
+            (uint64_t)w*h>NIKON_RAW_MAX_SAMPLES) {
+            error_setg(errp,"bounded even RAW source WIDTHxHEIGHT modes required");return;
+        }
+        for (unsigned j=0;j<i;j++) {
+            if (widths[j]==w && heights[j]==h) {
+                error_setg(errp,"duplicate RAW source mode");return;
+            }
+        }
+        widths[i]=w;heights[i]=h;
+    }
+    memcpy(s->video_raw_input_width,widths,sizeof(widths));
+    memcpy(s->video_raw_input_height,heights,sizeof(heights));
+    s->video_raw_input_frames=count;
+}
+
+static bool video_raw_select_source(NikonZ9State *s,unsigned *width,unsigned *height)
+{
+    unsigned w=s->primary_d980_latched[1]>>16,h=s->primary_d980_latched[2]>>16;
+    unsigned left=s->primary_d980_latched[1]&0xffff,top=s->primary_d980_latched[2]&0xffff;
+    if (!s->video_raw_input_frames) {
+        *width=w;*height=h;return !left && !top;
+    }
+    if ((left|top)&1) { return false; }
+    bool found=false;
+    uint64_t best=UINT64_MAX;
+    for (unsigned i=0;i<s->video_raw_input_frames;i++) {
+        unsigned fw=s->video_raw_input_width[i],fh=s->video_raw_input_height[i];
+        if (w>fw || h>fh || left>fw-w || top>fh-h) { continue; }
+        uint64_t area=(uint64_t)fw*fh;
+        if (area<best || (area==best && fw<*width)) {
+            *width=fw;*height=fh;best=area;found=true;
+        }
+    }
+    return found;
+}
+
 static bool video_raw_descriptor(NikonZ9State *s)
 {
     const uint32_t *c=s->primary_d980_latched;
     unsigned w=c[1]>>16,h=c[2]>>16,pitch=c[4];
+    unsigned source_w=0,source_h=0;
+    if (!video_raw_select_source(s,&source_w,&source_h)) { return false; }
     if (!s->video_raw_transport_model || !s->raw_pixels || c[0]!=1 ||
-        (c[1]&0xffff) || (c[2]&0xffff) || !w || !h || ((w|h)&1) ||
+        !w || !h || ((w|h)&1) ||
         w>NIKON_RAW_MAX_DIMENSION || h>NIKON_RAW_MAX_DIMENSION ||
         (uint64_t)w*h>NIKON_RAW_MAX_SAMPLES ||
         pitch!=(((w*14+7)/8+31)&~31u) || (uint64_t)pitch*h>128*MiB ||
@@ -303,17 +375,22 @@ static bool video_raw_receive(NikonZ9State *s)
         (!s->engine1530_active && !s->video_raw_queued_input_model) ||
         s->engine1530_config[0x404/4]) { return false; }
     if (!video_raw_receiver_bank_ready(s)) { return false; }
-    unsigned source_w=s->primary_d980_latched[1]>>16;
-    unsigned source_h=s->primary_d980_latched[2]>>16;
-    unsigned w=source_w,h=source_h,left=0,top=0;
+    unsigned window_w=s->primary_d980_latched[1]>>16;
+    unsigned window_h=s->primary_d980_latched[2]>>16;
+    unsigned source_w=0,source_h=0;
+    if (!video_raw_select_source(s,&source_w,&source_h)) { return false; }
+    unsigned origin_x=s->primary_d980_latched[1]&0xffff;
+    unsigned origin_y=s->primary_d980_latched[2]&0xffff;
+    unsigned w=window_w,h=window_h,left=origin_x,top=origin_y;
     unsigned pitch=s->primary_d980_latched[4],row=s->engine152c_stream_row;
     if (s->video_raw_queued_input_model) {
         w=s->engine152c_stream_width;h=s->engine152c_stream_height;
         left=s->video_raw_receiver_left;top=s->video_raw_receiver_top;
         if (!w || !h || ((w|h|left|top)&1) || s->video_raw_receiver_mode ||
-            w>source_w || h>source_h || left>source_w-w || top>source_h-h) {
+            w>window_w || h>window_h || left>window_w-w || top>window_h-h) {
             s->video_raw_encode_rejects++;return false;
         }
+        left+=origin_x;top+=origin_y;
         pitch=((w*14+7)/8+31)&~31u;
     }
     /* Do not overwrite any unconsumed packet, including an aliased span
@@ -342,7 +419,9 @@ static bool video_raw_receive(NikonZ9State *s)
     unsigned packet_slot=s->video_raw_receiver_banks_model ? video_raw_packet_destination(s,output,capacity) : row;
     if (packet_slot>=video_raw_packet_slots(s)) { s->video_raw_ring_full_waits++;return false; }
     size_t bytes=(size_t)pitch*h;
-    if (!s->video_raw_compressed || w!=s->video_raw_width || h!=s->video_raw_height || pitch!=s->video_raw_pitch ||
+    if (!s->video_raw_compressed ||
+        (s->raw_temporal_input_model && s->video_raw_cache_input_frame!=s->raw_temporal_input_frames) ||
+        w!=s->video_raw_width || h!=s->video_raw_height || pitch!=s->video_raw_pitch ||
         source_w!=s->video_raw_source_width || source_h!=s->video_raw_source_height ||
         left!=s->video_raw_crop_x || top!=s->video_raw_crop_y ||
         (s->video_raw_he_codec_model && s->video_raw_compressed_bytes!=capacity)) {
@@ -356,6 +435,7 @@ static bool video_raw_receive(NikonZ9State *s)
         if (result!=Z_OK || amount>capacity-(s->video_raw_he_codec_model ? 0 : 64)) { g_free(compressed);s->video_raw_encode_rejects++;return false; }
         g_free(s->video_raw_compressed);s->video_raw_compressed=compressed;
         s->video_raw_compressed_bytes=amount;s->video_raw_crc=checksum;
+        s->video_raw_cache_input_frame=s->raw_temporal_input_frames;
         s->video_raw_width=w;s->video_raw_height=h;s->video_raw_pitch=pitch;
         s->video_raw_source_width=source_w;s->video_raw_source_height=source_h;
         s->video_raw_crop_x=left;s->video_raw_crop_y=top;
@@ -396,7 +476,16 @@ static bool video_raw_receive(NikonZ9State *s)
      * native-owned. The packet cannot be reused before actual consumption.
      * This boundary placement is functional, not measured silicon timing. */
     if (s->video_raw_queued_input_model) {
-        s->engine152c_stream_pending|=1;s->video_raw_input_events++;
+        if (s->video_raw_receiver_banks_model && !s->engine1530_active && row==3) {
+            /* The original callback wakes its supplier for bit0 before it
+             * stores bit4's bank-ready byte. Combining both causes exposes
+             * a cross-CPU wake-before-ready window. Retain this actual packet
+             * notification until the preceding bank cause is acknowledged;
+             * the existing device clock then exposes it separately. */
+            s->video_raw_receiver_notify_pending=true;
+        } else {
+            s->engine152c_stream_pending|=1;s->video_raw_input_events++;
+        }
     }
     /* The D980 FIFO was internal, not a RAM DMA. Its old RAM-byte/frame
      * counters remain separate from this transport's actual packet writes. */
@@ -412,6 +501,15 @@ static void video_raw_tick(void *opaque)
 {
     NikonZ9State *s=opaque;
     timer_mod(s->video_raw_timer,qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL)+33333333);
+    if (s->video_raw_receiver_notify_pending) {
+        if (!s->engine152c_stream_requested) {
+            s->video_raw_receiver_notify_pending=false;
+        } else if (!(s->engine152c_stream_pending&0x10)) {
+            s->video_raw_receiver_notify_pending=false;
+            s->engine152c_stream_pending|=1;s->video_raw_input_events++;
+            engine152c_stream_irq_update(s);
+        }
+    }
     if (s->video_raw_packet_owned) { video_raw_decode(s); }
     video_backend_drain_tick(s);
     /* Input producer runs on the original source clock via D980 tick. */
@@ -542,6 +640,8 @@ static char *get_video_raw_packet_ring_state(Object *obj, Error **errp)
         s->video_raw_receiver_banks_model?"true":"false",s->video_raw_receiver_bank,
         s->video_raw_receiver_wait_bank?"true":"false",s->video_raw_receiver_fresh,
         s->video_raw_receiver_refills,s->video_raw_receiver_latches,s->video_raw_reposted_packets);
+    g_string_append_printf(out,",\"input_notification_queued\":%s",
+        s->video_raw_receiver_notify_pending?"true":"false");
     g_string_append(out,",\"scope\":\"actual RAM provenance grows without a hardware FIFO limit; producer ACK cannot release; only explicitly posted decoder records are decoded; CPU RAM remains intact; original codec unimplemented\"}");
     return g_string_free(out,false);
 }

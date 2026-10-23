@@ -1,3 +1,21 @@
+# Current shared441 scope
+
+See [shared441](shared441.md) and `source-snapshot.json` for the current development build. Camera qualifications below retain their original revision and executable hashes. They are not current-build regression results.
+
+Run the current no-firmware frame STOP/drain/mask/ACK/resume contracts on both
+boards, in paired/split mode and with the new option both off/on:
+
+```sh
+python tools/check_receiver_frames.py --qemu /absolute/path/to/qemu-system-aarch64 \
+  --output .local/receiver-frames441.json
+```
+
+This does not execute proprietary firmware or qualify native capture. The C
+pixel test also checks a complete 12-bit grey ramp against independently computed
+ten-bit transfer values, ensuring the new path preserves more than eight bits.
+
+## Historical records
+
 # Validation status
 
 ## Full RAW capture update (2026-10-11)
