@@ -124,5 +124,21 @@
   "original_algorithms_accepted": false,
   "NeuPro_documents_available": false,
   "local_NN_reproduction": "inconclusive",
-  "private_payloads_included": false
+  "private_payloads_included": false,
+  "current_C30_experiment": {
+    "run": "z9-qemu-938-receiver-frame-owner",
+    "binary_sha256": "67eba488585fc72ee6a903214d09c10bb35f26be37e4ea744c30c94cd0b01bb0",
+    "result_sha256": "e69f1d46436232d637d6c43f0cbebf83e558724e99483e193c9627aa6036d70e",
+    "RAW_packet_SHA256": "1c0f7c59b5c198311d910f93f84ef1e48464824eade45a08122bf3f39c720843",
+    "RAW_samples_independently_verified": 45705600,
+    "temporal_CRC_patches": 9,
+    "source_virtual_ns": 115244836412,
+    "FULL_queued_virtual_ns": 119300272764,
+    "source_age_at_FULL_seconds": 4.055436352,
+    "configured_prerelease_window_seconds": 1,
+    "within_prerelease_window": false,
+    "RAW_ring_latched": false,
+    "camera_image_files": 0,
+    "RAW_prerelease_accepted": false
+  }
 }

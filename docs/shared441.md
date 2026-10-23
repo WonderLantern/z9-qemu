@@ -76,9 +76,11 @@ The earlier failing runs had five late calls and two late stores.
 
 **It still failed capture acceptance.** One 8280×5520 functional RAW packet
 was present in RAM, but no camera image was completed on the virtual card and
-the RAW ring was not latched. No independent complete packet-pixel audit was
-performed for this run. Visible live view and the absence of the previous
-failure do not qualify pre-release recording or prove a universal heap fix.
+the RAW ring was not latched. The exported packet independently matched all 45,705,600 RAW samples and
+all nine temporal CRC patches. Its source was 4.055436352 seconds before FULL,
+outside the configured one-second pre-release window. Pixel transport passed;
+pre-release timing, native ring retention and camera files did not. Visible live
+view and the absence of the previous failure do not prove a universal heap fix.
 Private reference binary:
 `67eba488585fc72ee6a903214d09c10bb35f26be37e4ea744c30c94cd0b01bb0`.
 
